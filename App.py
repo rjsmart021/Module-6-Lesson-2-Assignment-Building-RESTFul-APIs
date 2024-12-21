@@ -1,56 +1,110 @@
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_marshmallow import Marshmallow
+from marshmallow import fields
+from marshmallow import ValidationError
 import mysql.connector
+from mysql.connector import Error
+from SQL import connect_database
 
 app = Flask(__name__)
+ma = Marshmallow(app)
+class CustomerSchema(ma.Schema):
+    name = fields.String(required=True)
+    email = fields.String(required=True)
+    phone = fields.String(required=True)
+
+class Meta:
+    fields = ("name", "email", "phone")
+customer_schema = CustomerSchema()
+customers_schema = CustomerSchema(many=True)
 
 @app.route('/')
 def home():
     return 'Welcome to the first page og this app'
-if __name__ == '__main__':
-    app.run(debug=True)
 
-@app.route('/get_members')
-def get_members():
-    return 'jsonify(Members)'
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route("/members", methods=["POST"])
+def add_member():
+    try:
+        customer = customer_schema.load(request.json)
+    except ValidationError as err:
+        return jsonify(err.messages), 400
 
-@app.route('/add_members', methods=['POST'])
-def add_member(member_id,First_Name, Last_Name,age, Gender):
-    new_members = request.get_json()
-    errors = member_schema.validate(new_stu)
-    if (errors):
-        return jsonify(errors), 404
-    else:
-        members.append(new_members)
-        return; jsonify(f'New_members:
-        {new-student["name"]} was
-         added to your database!'), 200  
+    conn = connect_database()
+    if conn is None:
+        return jsonify({"ERROR": "Database connection failed."}), 500
+
+    try:
+        cursor = conn.cursor()
+        query = "INSERT INTO Members (name, age, phone, email) VALUES (%s, %s, %s, %s)"
+        cursor.execute(query, (customer["name"], customer["age"], customer["phone"], customer["email"]))
+        conn.commit()
+        return jsonify({"MESSAGE": "Member added successfully."}), 201
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 
 @app.route('/members/<int:id>', methods=['GET'])
-def get_member(start_age, end_age):
-    return 'jsonify(Members)'
-    app.run(debug=True)
+def get_member(member_id):
+    conn = connect_database()
+    try:
+        cursor = conn.cursor()
+        query = "Select * from Members where id = %s"
+        cursor.execute(query, (member_id,))
+        member = cursor.fetchone()
+        if member: 
+            return customer_schema.jsonify(member),201
+        else:
+            return jsonify({"error": "member not found"}),404
     
-@app.route('/members/<int:id>', methods=['Update'])
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+    
+@app.route('/members/<int:id>', methods=['PUT'])
 def put_member(member_id):
-    updated_member = request.get_json()
-    for member in members:
-        if (member['id'] ==member_id):
-            member.update(updated_member)
-            return jsonify(member), 200
-    return jsonify({'message':'student not found'})
+    try:
+        customer = customer_schema.load(request.json)
+    except ValidationError as err:
+        return jsonify(err.messages), 400
 
-@app.route('/members', methods=['DELETE'])
-def delete_members(id):
-    deleted_member = request.get_json()
-    for member in members:
-        if (member['id'] == member_id):
-            member.remove(deleted_member)
-            return jsonify(member), 200
+    conn = connect_database()
+    if conn is None:
+        return jsonify({"ERROR": "Database connection failed."}), 500
 
-    cur.execute("DELETE FROM Members WHERE name = %s)"
-                , (id)
-                )
-    conn.commit()
+    try:
+        cursor = conn.cursor()
+        query = "Update Members set name = %s, age = %s, phone = %s, email = %s where id = %s"
+        cursor.execute(query, (customer["name"], customer["age"], customer["phone"], customer["email"], member_id))
+        conn.commit()
+        return jsonify({"MESSAGE": "Member updated successfully."}), 201
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/members <int:id>', methods=['DELETE'])
+def delete_members(members_id):
+    try:
+        cursor = conn.cursor()
+        query = "Select * from Members where id = %s"
+        cursor.execute(query, (members_id))
+        member = cursor.fetchone()
+        if member: 
+            return customer_schema.jsonify(member),201
+        else:
+            return jsonify({"error": "member not found"}),404
+    
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+if __name__ == '__main__':
+    app.run(debug=True)
