@@ -13,10 +13,18 @@ class CustomerSchema(ma.Schema):
     email = fields.String(required=True)
     phone = fields.String(required=True)
 
+class WorkoutSchema(ma.Schema):
+    session_id = fields.String(required=True) 
+    member_id = fields.String(required=True)
+    session_date = fields.String(required=True)
+    session_time = fields.String(required=True)
+    activity = fields.String(required=True)
+    
 class Meta:
     fields = ("name", "email", "phone")
 customer_schema = CustomerSchema()
 customers_schema = CustomerSchema(many=True)
+workout_schema = WorkoutSchema
 
 @app.route('/')
 def home():
@@ -105,6 +113,88 @@ def delete_members(members_id):
     finally:
         cursor.close()
         conn.close()
+
+@app.route('/workouts/<int:id>', methods=['GET'])
+def get_workout(workout_id):
+    conn = connect_database()
+    try:
+        cursor = conn.cursor()
+        query = "Select * from Workout where id = %s"
+        cursor.execute(query, (workout_id,))
+        workout = cursor.fetchone()
+        if workout: 
+            return workout_schema.jsonify(workout),201
+        else:
+            return jsonify({"error": "Workout not found"}),404
+        
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/workouts/add_workout', methods=['POST'])
+def add_workout():
+    try:
+        workout = workout_schema.load(request.json)
+    except ValidationError as err:
+        return jsonify(err.messages), 400
+
+    conn = connect_database()
+    if conn is None:
+        return jsonify({"ERROR": "Database connection failed."}), 500
+    try:
+        cursor = conn.cursor()
+        query = "INSERT INTO WorkoutSessions (session_id, member_id, session_date, session_time, activity) VALUES (%s, %s, %s, %s)"
+        cursor.execute(query, (workout["session_id"], workout["member_id"], workout["session_date"], workout["session_time"], workout["activity"]))
+        conn.commit()
+        return jsonify({"MESSAGE": "WorkoutSession added successfully."}), 201
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/workouts', methods=['PUT'])
+def update_workout(id):
+    try:
+        workout = workout_schema.load(request.json)
+    except ValidationError as err:
+        return jsonify(err.messages), 400
+
+    conn = connect_database()
+    if conn is None:
+        return jsonify({"ERROR": "Database connection failed."}), 500
+    try:
+        cursor = conn.cursor()
+        query = "Update WorkoutSessions set session_id = %s, member_id = %s, session_date = %s, session_time = %s where activity = %s"
+        cursor.execute(query, (workout["session_id"], workout["member_id"], workout["session_date"], workout["session_time"], workout["activity"]))
+        conn.commit()
+        return jsonify({"MESSAGE": "WorkoutSession updated successfully."}), 201
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/workouts', methods=['DELETE'])
+def delete_workout(workout_id):
+    try:
+        cursor = conn.cursor()
+        query = "Select * from WorkoutSessions where id = %s"
+        cursor.execute(query, (workout_id))
+        workout = cursor.fetchone()
+        if workout: 
+            return workout_schema.jsonify(workout),201
+        else:
+            return jsonify({"error": "workout not found"}),404
+    
+    except Error as e:
+        return jsonify({"ERROR": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 
 if __name__ == '__main__':
     app.run(debug=True)
